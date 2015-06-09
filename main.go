@@ -1,53 +1,38 @@
 package main
 
-import "fmt"
-import "crypto/md5"
+import (
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"strings"
+	"time"
+)
 
-// url, gfy-url
-func convert(input string, n, max int) []int {
-	b := md5.Sum([]byte(input)) // 16 bytes
-	result := make([]int, n)
-	blocksize := (numbits(max) / 8) + 1
-	j := 0
-	for i := 0; i < n; i++ {
-		result[i] = getInt(b[j:j+blocksize]) % max
-		j += blocksize
+var (
+	animals    []string
+	adjectives []string
+)
+
+func readWords(filename string) ([]string, error) {
+	d, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return []string{}, err
 	}
-	return result
+	words := strings.Split(string(d), "\n")
+	return words, nil
 }
 
-func getInt(b []byte) int {
-	l := len(b)
-	result := 0
-	var shiftby uint32
-	for i := 0; i < l; i++ {
-		shiftby = uint32(8 * (l - i - 1))
-		result |= int(b[i]) << shiftby
-	}
-	return result
-}
+func getShortURL() string {
+	return fmt.Sprintf("%s%s", adjectives[rand.Intn(len(adjectives))], animals[rand.Intn(len(animals))])
 
-func numbits(n int) int {
-	result := 0
-	for n > 0 {
-		n = n / 2
-		result++
-	}
-	return result
-}
-
-// max is implicitly 256
-func convert2(input string, n int) []int {
-	b := md5.Sum([]byte(input))
-	result := make([]int, n)
-	for i := 0; i < n; i++ {
-		result[i] = int(b[i])
-	}
-	return result
 }
 
 func main() {
-	fmt.Println((numbits(32767) / 8) + 1)
-	fmt.Println(convert("hivkdv", 8, 1024))
-
+	animals, _ = readWords("animals4.txt")
+	adjectives, _ = readWords("adjectives3.txt")
+	rand.Seed(time.Now().UnixNano())
+	for {
+		<-time.After(time.Second)
+		fmt.Println(getShortURL())
+	}
 }
