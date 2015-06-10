@@ -15,12 +15,17 @@ import (
 var (
 	c redis.Conn
 
+	redisPort  = ":6379"
+	serverPort = ":9091"
+
 	animals    []string
 	adjectives []string
 
 	longmap   = "longToShort"
 	shortmap  = "shortToLong"
 	custommap = "customToLong"
+
+	passwordEnv = "LINKTOPASSWORD"
 )
 
 func readWords(filename string) ([]string, error) {
@@ -30,6 +35,15 @@ func readWords(filename string) ([]string, error) {
 	}
 	words := strings.Split(string(d), "\n")
 	return words, nil
+}
+
+func redisSet(tablename, key, value string) error {
+	_, err := c.Do("HSET", tablename, key, value)
+	return err
+}
+
+func redisGet(tablename, key string) (string, error) {
+	return redis.String(c.Do("HGET", tablename, key))
 }
 
 func createShortURL() string {
@@ -43,15 +57,6 @@ func createShortURL() string {
 		}
 	}
 	return url
-}
-
-func redisSet(tablename, key, value string) error {
-	_, err := c.Do("HSET", tablename, key, value)
-	return err
-}
-
-func redisGet(tablename, key string) (string, error) {
-	return redis.String(c.Do("HGET", tablename, key))
 }
 
 func shorten(w http.ResponseWriter, r *http.Request) {
@@ -97,41 +102,27 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
-func mustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
-		for _, param := range params {
-			if len(r.Form.Get(param)) == 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(fmt.Sprintf("Expected parameter %s not found\n", param)))
-				return
-			}
-		}
-		fn(w, r)
-	}
-}
-
-func logreq(fn http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Received req for " + r.URL.Path)
-		fn(w, r)
-	}
-}
-
 func main() {
-	animals, _ = readWords("animals4.txt")
-	adjectives, _ = readWords("adjectives3.txt")
-	rand.Seed(time.Now().UnixNano())
-
 	var err error
-	c, err = redis.Dial("tcp", ":6379")
+	animals, err = readWords("animals.txt")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	adjectives, err = readWords("adjectives.txt")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	c, err = redis.Dial("tcp", redisPort)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer c.Close()
 
+	rand.Seed(time.Now().UnixNano())
+
 	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
-	http.HandleFunc("/customshorten", logreq(mustParams(customshorten, "longurl", "customurl")))
+	http.HandleFunc("/customshorten", logreq(mustParams(simpleAuth(customshorten), "longurl", "customurl")))
 	http.HandleFunc("/", logreq(redirect))
-	http.ListenAndServe(":9091", nil)
+	http.ListenAndServe(serverPort, nil)
 }
