@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -45,33 +46,67 @@ func redisGet(tablename, key string) (string, error) {
 }
 
 func shorten(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	fmt.Println(r.Form, r.PostForm)
 	longurl := r.Form.Get("longurl")
-	if len(longurl) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+
 	existing, err := redisGet(longmap, longurl)
-	fmt.Println(existing, err)
 	if err == nil {
-		w.Write([]byte(existing))
+		w.Write([]byte(fmt.Sprintf("Short link from %s to %s exists\n", longurl, existing)))
 		return
 	}
 	shorturl := getShortURL()
 	redisSet(longmap, longurl, shorturl)
 	redisSet(shortmap, shorturl, longurl)
-	w.Write([]byte(shorturl))
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s\n", longurl, shorturl)))
+}
+
+func customshorten(w http.ResponseWriter, r *http.Request) {
+	longurl := r.Form.Get("longurl")
+	customurl := r.Form.Get("customurl")
+
+	_, err := redisGet(custommap, customurl)
+	if err == nil {
+		w.WriteHeader(http.StatusTeapot)
+		w.Write([]byte(fmt.Sprintf("Custom URL %s is already taken\n", customurl)))
+		return
+	}
+	redisSet(custommap, customurl, longurl)
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s\n", longurl, customurl)))
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
-	longurl, err := redisGet(shortmap, r.URL.Path[1:len(r.URL.Path)])
-	fmt.Println(r.URL.Path, err)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	path := r.URL.Path[1:len(r.URL.Path)]
+	longurl, err := redisGet(shortmap, path)
+	if err == nil {
+		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
 	}
-	fmt.Println(longurl)
+	longurl, err = redisGet(custommap, path)
+	if err == nil {
+		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
+		return
+	}
+	w.WriteHeader(http.StatusBadRequest)
+}
+
+func mustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		for _, param := range params {
+			if len(r.Form.Get(param)) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(fmt.Sprintf("Expected parameter %s\n", param)))
+				return
+			}
+		}
+		fn(w, r)
+	}
+}
+
+func logreq(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Received req for " + r.URL.Path)
+		fn(w, r)
+	}
 }
 
 func main() {
@@ -82,13 +117,12 @@ func main() {
 	var err error
 	c, err = redis.Dial("tcp", ":6379")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalln(err)
 	}
 	defer c.Close()
 
-	http.HandleFunc("/shorten", shorten)
-	http.HandleFunc("/", redirect)
+	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
+	http.HandleFunc("/customshorten", logreq(mustParams(customshorten, "longurl", "customurl")))
+	http.HandleFunc("/", logreq(redirect))
 	http.ListenAndServe(":9091", nil)
-
 }
