@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -18,18 +19,22 @@ var (
 
 	adjectives []string
 	animals    []string
+
+	adjectivesfile = flag.String("adjectives", "adjectives.txt", "Adjectives file path")
+	animalsfile    = flag.String("animals", "animals.txt", "Animals file path")
+	logfile        = flag.String("log", "linkto.log", "Log file path")
+
+	hostname   = flag.String("host", "", "Linkto's hostname")
+	serverPort = flag.String("lport", ":9091", "Linkto's port")
+	redisPort  = flag.String("rport", ":6379", "Redis' port")
 )
 
 const (
-	redisPort  = ":6379"
-	serverPort = ":9091"
-
 	longmap   = "longToShort"
 	shortmap  = "shortToLong"
 	custommap = "customToLong"
 
 	passwordEnv = "LINKTOPASSWORD"
-	logfile     = "linkto.log"
 )
 
 func readWords(filename string) ([]string, error) {
@@ -68,13 +73,13 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := redisGet(longmap, longurl)
 	if err == nil {
-		w.Write([]byte(fmt.Sprintf("Short link from %s to %s exists\n", longurl, existing)))
+		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, *hostname, existing)))
 		return
 	}
 	shorturl := createShortURL()
 	redisSet(longmap, longurl, shorturl)
 	redisSet(shortmap, shorturl, longurl)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s\n", longurl, shorturl)))
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, shorturl)))
 }
 
 func customshorten(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +89,11 @@ func customshorten(w http.ResponseWriter, r *http.Request) {
 	_, err := redisGet(custommap, customurl)
 	if err == nil {
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte(fmt.Sprintf("Custom URL %s is already taken\n", customurl)))
+		w.Write([]byte(fmt.Sprintf("Custom URL %s/%s is already taken\n", *hostname, customurl)))
 		return
 	}
 	redisSet(custommap, customurl, longurl)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s\n", longurl, customurl)))
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, customurl)))
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
@@ -107,17 +112,19 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	flag.Parse()
 	var err error
-	animals, err = readWords("animals.txt")
+
+	animals, err = readWords(*animalsfile)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	adjectives, err = readWords("adjectives.txt")
+	adjectives, err = readWords(*adjectivesfile)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	c, err = redis.Dial("tcp", redisPort)
+	c, err = redis.Dial("tcp", *redisPort)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -125,7 +132,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	logwriter, err := os.OpenFile(logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, os.ModePerm)
+	logwriter, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -134,5 +141,5 @@ func main() {
 	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
 	http.HandleFunc("/customshorten", logreq(mustParams(simpleAuth(customshorten), "longurl", "customurl")))
 	http.HandleFunc("/", logreq(redirect))
-	log.Fatalln(http.ListenAndServe(serverPort, nil))
+	log.Fatalln(http.ListenAndServe(*serverPort, nil))
 }
