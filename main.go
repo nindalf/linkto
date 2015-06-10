@@ -32,8 +32,17 @@ func readWords(filename string) ([]string, error) {
 	return words, nil
 }
 
-func getShortURL() string {
-	return fmt.Sprintf("%s%s", adjectives[rand.Intn(len(adjectives))], animals[rand.Intn(len(animals))])
+func createShortURL() string {
+	var url string
+	var err error
+	for err == nil {
+		url = fmt.Sprintf("%s%s", adjectives[rand.Intn(len(adjectives))], animals[rand.Intn(len(animals))])
+		_, err = redisGet(shortmap, url)
+		if err == nil {
+			log.Printf("Created shortlink %s but was already present in the map\n", url)
+		}
+	}
+	return url
 }
 
 func redisSet(tablename, key, value string) error {
@@ -53,7 +62,7 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Short link from %s to %s exists\n", longurl, existing)))
 		return
 	}
-	shorturl := getShortURL()
+	shorturl := createShortURL()
 	redisSet(longmap, longurl, shorturl)
 	redisSet(shortmap, shorturl, longurl)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s\n", longurl, shorturl)))
@@ -94,7 +103,7 @@ func mustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
 		for _, param := range params {
 			if len(r.Form.Get(param)) == 0 {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(fmt.Sprintf("Expected parameter %s\n", param)))
+				w.Write([]byte(fmt.Sprintf("Expected parameter %s not found\n", param)))
 				return
 			}
 		}
