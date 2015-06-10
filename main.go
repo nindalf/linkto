@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -15,17 +16,20 @@ import (
 var (
 	c redis.Conn
 
+	adjectives []string
+	animals    []string
+)
+
+const (
 	redisPort  = ":6379"
 	serverPort = ":9091"
-
-	animals    []string
-	adjectives []string
 
 	longmap   = "longToShort"
 	shortmap  = "shortToLong"
 	custommap = "customToLong"
 
 	passwordEnv = "LINKTOPASSWORD"
+	logfile     = "linkto.log"
 )
 
 func readWords(filename string) ([]string, error) {
@@ -121,8 +125,14 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
+	logwriter, err := os.OpenFile(logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.SetOutput(logwriter)
+
 	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
 	http.HandleFunc("/customshorten", logreq(mustParams(simpleAuth(customshorten), "longurl", "customurl")))
 	http.HandleFunc("/", logreq(redirect))
-	http.ListenAndServe(serverPort, nil)
+	log.Fatalln(http.ListenAndServe(serverPort, nil))
 }
