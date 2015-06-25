@@ -3,53 +3,25 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 var (
-	adjectives []string
-	animals    []string
+	wordfiles = flag.String("wordfiles", "adjectives.txt animals.txt", "Files with the link words")
+	logfile   = flag.String("log", "linkto.log", "Log file path")
 
-	adjectivesfile = flag.String("adjectives", "adjectives.txt", "Adjectives file path")
-	animalsfile    = flag.String("animals", "animals.txt", "Animals file path")
-	logfile        = flag.String("log", "linkto.log", "Log file path")
-
-	hostname   = flag.String("host", "", "Linkto's hostname")
-	serverPort = flag.String("lport", ":9091", "Linkto's port")
-	redisPort  = flag.String("rport", ":6379", "Redis' port")
+	hostname  = flag.String("host", "", "Linkto's hostname")
+	redisPort = flag.String("rport", ":6379", "Redis' port")
 )
 
 const (
-	passwordEnv = "LINKTOPASSWORD"
+	serverPort = ":9091"
+
+	passwordEnv = "LINKTO_PASSWORD"
 )
-
-func readWords(filename string) ([]string, error) {
-	d, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return []string{}, err
-	}
-	words := strings.Split(string(d), "\n")
-	return words, nil
-}
-
-func createShortURL() string {
-	var url string
-	var err error
-	for err == nil {
-		url = fmt.Sprintf("%s%s", adjectives[rand.Intn(len(adjectives))], animals[rand.Intn(len(animals))])
-		_, err = shortmap.Get(url)
-		if err == nil {
-			log.Printf("Created shortlink %s but was already present in the map\n", url)
-		}
-	}
-	return url
-}
 
 func shorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
@@ -59,7 +31,7 @@ func shorten(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, *hostname, existing)))
 		return
 	}
-	shorturl := createShortURL()
+	shorturl := shortener.GetShortURL()
 	longmap.Set(longurl, shorturl)
 	shortmap.Set(shorturl, longurl)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, shorturl)))
@@ -96,16 +68,6 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
-	var err error
-
-	animals, err = readWords(*animalsfile)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	adjectives, err = readWords(*adjectivesfile)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	c, err := setupRedis(*redisPort)
 	if err != nil {
@@ -113,7 +75,11 @@ func main() {
 	}
 	defer c.Close()
 
-	rand.Seed(time.Now().UnixNano())
+	files := strings.Split(*wordfiles, " ")
+	err = setupShortener(shortmap, files)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	logwriter, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, os.ModePerm)
 	if err != nil {
@@ -124,5 +90,5 @@ func main() {
 	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
 	http.HandleFunc("/customshorten", logreq(mustParams(simpleAuth(customshorten), "longurl", "customurl")))
 	http.HandleFunc("/", logreq(redirect))
-	log.Fatalln(http.ListenAndServe(*serverPort, nil))
+	log.Fatalln(http.ListenAndServe(serverPort, nil))
 }
