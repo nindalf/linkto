@@ -10,13 +10,9 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/garyburd/redigo/redis"
 )
 
 var (
-	c redis.Conn
-
 	adjectives []string
 	animals    []string
 
@@ -30,10 +26,6 @@ var (
 )
 
 const (
-	longmap   = "longToShort"
-	shortmap  = "shortToLong"
-	custommap = "customToLong"
-
 	passwordEnv = "LINKTOPASSWORD"
 )
 
@@ -46,21 +38,12 @@ func readWords(filename string) ([]string, error) {
 	return words, nil
 }
 
-func redisSet(tablename, key, value string) error {
-	_, err := c.Do("HSET", tablename, key, value)
-	return err
-}
-
-func redisGet(tablename, key string) (string, error) {
-	return redis.String(c.Do("HGET", tablename, key))
-}
-
 func createShortURL() string {
 	var url string
 	var err error
 	for err == nil {
 		url = fmt.Sprintf("%s%s", adjectives[rand.Intn(len(adjectives))], animals[rand.Intn(len(animals))])
-		_, err = redisGet(shortmap, url)
+		_, err = shortmap.Get(url)
 		if err == nil {
 			log.Printf("Created shortlink %s but was already present in the map\n", url)
 		}
@@ -71,14 +54,14 @@ func createShortURL() string {
 func shorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
 
-	existing, err := redisGet(longmap, longurl)
+	existing, err := longmap.Get(longurl)
 	if err == nil {
 		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, *hostname, existing)))
 		return
 	}
 	shorturl := createShortURL()
-	redisSet(longmap, longurl, shorturl)
-	redisSet(shortmap, shorturl, longurl)
+	longmap.Set(longurl, shorturl)
+	shortmap.Set(shorturl, longurl)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, shorturl)))
 }
 
@@ -86,24 +69,24 @@ func customshorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
 	customurl := r.Form.Get("customurl")
 
-	_, err := redisGet(custommap, customurl)
+	_, err := custommap.Get(customurl)
 	if err == nil {
 		w.WriteHeader(http.StatusTeapot)
 		w.Write([]byte(fmt.Sprintf("Custom URL %s/%s is already taken\n", *hostname, customurl)))
 		return
 	}
-	redisSet(custommap, customurl, longurl)
+	custommap.Set(customurl, longurl)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, customurl)))
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[1:len(r.URL.Path)]
-	longurl, err := redisGet(shortmap, path)
+	longurl, err := shortmap.Get(path)
 	if err == nil {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
 	}
-	longurl, err = redisGet(custommap, path)
+	longurl, err = custommap.Get(path)
 	if err == nil {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
@@ -124,7 +107,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	c, err = redis.Dial("tcp", *redisPort)
+	c, err := setupRedis(*redisPort)
 	if err != nil {
 		log.Fatalln(err)
 	}
