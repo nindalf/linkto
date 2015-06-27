@@ -64,7 +64,7 @@ func (r redisExpire) Incr(key string, expireSecs int) error {
 }
 
 func (r redisExpire) TTL(key string) (int, error) {
-	ttl, err := redis.Int(r.c.Do("GET", key))
+	ttl, err := redis.Int(r.c.Do("TTL", key))
 	if err != nil {
 		return ttl, err
 	}

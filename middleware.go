@@ -5,9 +5,23 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
-func mustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
+// LogResp logs all the responses to clients
+// It does this by replacing the default ResponseWriter with a custom one
+func LogResp(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getIPAddress(r)
+		log.Printf("%s - Received req for %s\n", ip, r.URL.Path)
+		logger := responseLogger{w: w, ip: ip}
+		fn(logger, r)
+	}
+}
+
+// MustParams checks for the existence of all specified params in the request
+// If they don't exist, the request is declined as BadRequest (400)
+func MustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		for _, param := range params {
@@ -21,7 +35,10 @@ func mustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
 	}
 }
 
-func simpleAuth(fn http.HandlerFunc) http.HandlerFunc {
+// SimpleAuth checks if a password has been set in the ENV and
+// compares it to the request's password
+// If they don't match, the request is declined as Unauthorized (401)
+func SimpleAuth(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		linktopassword := os.Getenv(passwordEnv)
 		if len(linktopassword) > 0 {
@@ -36,16 +53,36 @@ func simpleAuth(fn http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func logreq(fn http.HandlerFunc) http.HandlerFunc {
+// RateLimit checks if the client making the request has been making
+// more than numreq requests in the specified duration
+// If it has, the request is declined as TooManyRequests (429)
+func RateLimit(fn http.HandlerFunc, duration, numreq int, store ExpireStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Received req for " + r.URL.Path)
-		logger := responseLogger{w: w}
-		fn(logger, r)
+		ip := getIPAddress(r)
+		requests, err := store.Get(ip)
+		if err != nil || requests < numreq {
+			store.Incr(ip, duration)
+			fn(w, r)
+			return
+		}
+		w.WriteHeader(429)
+		ttl, _ := store.TTL(ip)
+		body := fmt.Sprintf("You've sent too many requests in a short span of time. Try again after %d seconds\n", ttl)
+		w.Write([]byte(body))
 	}
 }
 
+func getIPAddress(r *http.Request) string {
+	ip := r.Form.Get("REMOTE_ADDR") // assuming its behind nginx
+	if len(ip) > 0 {
+		return ip
+	}
+	return strings.Split(r.RemoteAddr, ":")[0]
+}
+
 type responseLogger struct {
-	w http.ResponseWriter
+	w  http.ResponseWriter
+	ip string
 }
 
 func (r responseLogger) Header() http.Header {
@@ -53,11 +90,11 @@ func (r responseLogger) Header() http.Header {
 }
 
 func (r responseLogger) Write(b []byte) (int, error) {
-	log.Print(string(b))
+	log.Printf("%s - %s", r.ip, string(b))
 	return r.w.Write(b)
 }
 
 func (r responseLogger) WriteHeader(code int) {
-	log.Printf("Returned code %d\n", code)
+	log.Printf("%s - Returned code %d\n", r.ip, code)
 	r.w.WriteHeader(code)
 }

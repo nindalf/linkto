@@ -20,6 +20,9 @@ var (
 const (
 	serverPort = ":9091"
 
+	rateLimitSecs     = 60
+	rateLimitRequests = 10
+
 	passwordEnv = "LINKTO_PASSWORD"
 )
 
@@ -87,8 +90,11 @@ func main() {
 	}
 	log.SetOutput(logwriter)
 
-	http.HandleFunc("/shorten", logreq(mustParams(shorten, "longurl")))
-	http.HandleFunc("/customshorten", logreq(mustParams(simpleAuth(customshorten), "longurl", "customurl")))
-	http.HandleFunc("/", logreq(redirect))
+	shortenHandler := MustParams(RateLimit(shorten, rateLimitSecs, rateLimitRequests, rateLimitMap), "longurl")
+	customHandler := MustParams(SimpleAuth(customshorten), "longurl", "customurl")
+
+	http.HandleFunc("/shorten", LogResp(shortenHandler))
+	http.HandleFunc("/customshorten", LogResp(customHandler))
+	http.HandleFunc("/", LogResp(redirect))
 	log.Fatalln(http.ListenAndServe(serverPort, nil))
 }
