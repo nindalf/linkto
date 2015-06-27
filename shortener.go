@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-var (
-	shortener Shortener
-)
-
 // Shortener creates short strings based on the words it was initialised with
 type Shortener struct {
 	wordsSlice [][]string

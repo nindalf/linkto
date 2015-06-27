@@ -15,6 +15,13 @@ var (
 
 	hostname  = flag.String("host", "", "Linkto's hostname")
 	redisPort = flag.String("rport", ":6379", "Redis' port")
+
+	longmap      StringStore
+	shortmap     StringStore
+	custommap    StringStore
+	rateLimitMap ExpireStore
+
+	shortener Shortener
 )
 
 const (

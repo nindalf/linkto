@@ -12,13 +12,6 @@ const (
 	custommapName = "customToLong"
 )
 
-var (
-	longmap      StringStore
-	shortmap     StringStore
-	custommap    StringStore
-	rateLimitMap ExpireStore
-)
-
 // StringStore is a map from string to string
 type StringStore interface {
 	Get(key string) (string, error)
