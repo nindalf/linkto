@@ -16,7 +16,7 @@ var (
 // Shortener creates short strings based on the words it was initialised with
 type Shortener struct {
 	wordsSlice [][]string
-	existing   KVStore
+	existing   StringStore
 }
 
 func (s Shortener) GetShortURL() string {
@@ -40,7 +40,7 @@ func (s Shortener) createRandomString() string {
 	return bytes.String()
 }
 
-func setupShortener(existing KVStore, files []string) error {
+func setupShortener(existing StringStore, files []string) error {
 	rand.Seed(time.Now().UnixNano())
 
 	wordsSlice := make([][]string, len(files))
