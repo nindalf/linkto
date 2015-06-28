@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,21 +8,16 @@ import (
 	"strings"
 )
 
-var (
-	wordfiles = flag.String("wordfiles", "adjectives.txt animals.txt", "Files with the link words")
-	logfile   = flag.String("log", "linkto.log", "Log file path")
-
-	hostname  = flag.String("host", "", "Linkto's hostname")
-	redisPort = flag.String("rport", ":6379", "Redis' port")
-)
-
 const (
-	serverPort = ":9091"
-
 	rateLimitSecs     = 60
 	rateLimitRequests = 10
 
-	passwordEnv = "LINKTO_PASSWORD"
+	redisPortEnv = "REDIS_PORT"
+	hostnameEnv  = "LINKTO_HOSTNAME"
+	wordfilesEnv = "LINKTO_WORDFILES"
+	passwordEnv  = "LINKTO_PASSWORD"
+
+	linktoPort = ":9091"
 )
 
 type handler struct {
@@ -86,27 +80,21 @@ func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	flag.Parse()
-
-	c, err := setupRedis(*redisPort)
+	redisPort := os.Getenv(redisPortEnv)
+	c, err := setupRedis(redisPort[strings.LastIndex(redisPort, "/")+1 : len(redisPort)])
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer c.Close()
 
-	files := strings.Split(*wordfiles, " ")
+	files := strings.Split(os.Getenv(wordfilesEnv), " ")
 	shortener, err := newShortener(newStringStore(shortmapName), files)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	logwriter, err := os.OpenFile(*logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.SetOutput(logwriter)
-
-	h := newHandler(*hostname, shortener)
+	hostname := os.Getenv(hostnameEnv)
+	h := newHandler(hostname, shortener)
 
 	shorten := MustParams(RateLimit(h.shorten, rateLimitSecs, rateLimitRequests, newExpireStore()), "longurl")
 	http.HandleFunc("/shorten", LogResp(shorten))
@@ -116,5 +104,5 @@ func main() {
 
 	http.HandleFunc("/", LogResp(h.redirect))
 
-	log.Fatalln(http.ListenAndServe(serverPort, nil))
+	log.Fatalln(http.ListenAndServe(linktoPort, nil))
 }
