@@ -73,7 +73,7 @@ func RateLimit(fn http.HandlerFunc, duration, numreq int, store ExpireStore) htt
 }
 
 func getIPAddress(r *http.Request) string {
-	ip := r.Form.Get("REMOTE_ADDR") // assuming its behind nginx
+	ip := r.Header.Get("X-Forwarded-For") // assuming its behind nginx
 	if len(ip) > 0 {
 		return ip
 	}
