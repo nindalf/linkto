@@ -15,13 +15,6 @@ var (
 
 	hostname  = flag.String("host", "", "Linkto's hostname")
 	redisPort = flag.String("rport", ":6379", "Redis' port")
-
-	longmap      StringStore
-	shortmap     StringStore
-	custommap    StringStore
-	rateLimitMap ExpireStore
-
-	shortener Shortener
 )
 
 const (
@@ -33,47 +26,63 @@ const (
 	passwordEnv = "LINKTO_PASSWORD"
 )
 
-func shorten(w http.ResponseWriter, r *http.Request) {
-	longurl := r.Form.Get("longurl")
-
-	existing, err := longmap.Get(longurl)
-	if err == nil {
-		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, *hostname, existing)))
-		return
-	}
-	shorturl := shortener.GetShortURL()
-	longmap.Set(longurl, shorturl)
-	shortmap.Set(shorturl, longurl)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, shorturl)))
+type handler struct {
+	long      StringStore
+	short     StringStore
+	custom    StringStore
+	hostname  string
+	shortener Shortener
 }
 
-func customshorten(w http.ResponseWriter, r *http.Request) {
+func newHandler(hostname string, s Shortener) handler {
+	long := newStringStore(longmapName)
+	short := newStringStore(shortmapName)
+	custom := newStringStore(custommapName)
+	return handler{long, short, custom, hostname, s}
+}
+
+func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
+	longurl := r.Form.Get("longurl")
+
+	existing, err := h.long.Get(longurl)
+	if err == nil {
+		errortext := fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, h.hostname, existing)
+		http.Error(w, errortext, http.StatusTeapot)
+		return
+	}
+	shorturl := h.shortener.GetShortURL()
+	h.long.Set(longurl, shorturl)
+	h.short.Set(shorturl, longurl)
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, shorturl)))
+}
+
+func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
 	customurl := r.Form.Get("customurl")
 
-	_, err := custommap.Get(customurl)
+	_, err := h.custom.Get(customurl)
 	if err == nil {
-		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte(fmt.Sprintf("Custom URL %s/%s is already taken\n", *hostname, customurl)))
+		errortext := fmt.Sprintf("Custom URL %s/%s is already taken\n", h.hostname, customurl)
+		http.Error(w, errortext, http.StatusTeapot)
 		return
 	}
-	custommap.Set(customurl, longurl)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, *hostname, customurl)))
+	h.custom.Set(customurl, longurl)
+	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, customurl)))
 }
 
-func redirect(w http.ResponseWriter, r *http.Request) {
+func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[1:len(r.URL.Path)]
-	longurl, err := shortmap.Get(path)
+	longurl, err := h.short.Get(path)
 	if err == nil {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
 	}
-	longurl, err = custommap.Get(path)
+	longurl, err = h.custom.Get(path)
 	if err == nil {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
 	}
-	w.WriteHeader(http.StatusBadRequest)
+	http.Error(w, fmt.Sprintf("No link found for %s", path), http.StatusBadRequest)
 }
 
 func main() {
@@ -86,7 +95,7 @@ func main() {
 	defer c.Close()
 
 	files := strings.Split(*wordfiles, " ")
-	err = setupShortener(shortmap, files)
+	shortener, err := newShortener(newStringStore(shortmapName), files)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -97,11 +106,15 @@ func main() {
 	}
 	log.SetOutput(logwriter)
 
-	shortenHandler := MustParams(RateLimit(shorten, rateLimitSecs, rateLimitRequests, rateLimitMap), "longurl")
-	customHandler := MustParams(SimpleAuth(customshorten), "longurl", "customurl")
+	h := newHandler(*hostname, shortener)
 
-	http.HandleFunc("/shorten", LogResp(shortenHandler))
-	http.HandleFunc("/customshorten", LogResp(customHandler))
-	http.HandleFunc("/", LogResp(redirect))
+	shorten := MustParams(RateLimit(h.shorten, rateLimitSecs, rateLimitRequests, newExpireStore()), "longurl")
+	http.HandleFunc("/shorten", LogResp(shorten))
+
+	customShorten := MustParams(SimpleAuth(h.customShorten), "longurl", "customurl")
+	http.HandleFunc("/customshorten", LogResp(customShorten))
+
+	http.HandleFunc("/", LogResp(h.redirect))
+
 	log.Fatalln(http.ListenAndServe(serverPort, nil))
 }

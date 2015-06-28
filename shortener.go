@@ -36,20 +36,19 @@ func (s Shortener) createRandomString() string {
 	return bytes.String()
 }
 
-func setupShortener(existing StringStore, files []string) error {
+func newShortener(existing StringStore, files []string) (Shortener, error) {
 	rand.Seed(time.Now().UnixNano())
 
 	wordsSlice := make([][]string, len(files))
 	for i, file := range files {
 		words, err := readWords(file)
 		if err != nil {
-			return err
+			return Shortener{}, err
 		}
 		wordsSlice[i] = words
 	}
 
-	shortener = Shortener{wordsSlice, existing}
-	return nil
+	return Shortener{wordsSlice, existing}, nil
 }
 
 func readWords(filename string) ([]string, error) {

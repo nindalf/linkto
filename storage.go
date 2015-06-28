@@ -12,10 +12,18 @@ const (
 	custommapName = "customToLong"
 )
 
+var (
+	c redis.Conn
+)
+
 // StringStore is a map from string to string
 type StringStore interface {
 	Get(key string) (string, error)
 	Set(key, value string) error
+}
+
+func newStringStore(name string) StringStore {
+	return redisMap{c: c, mapName: name}
 }
 
 type redisMap struct {
@@ -38,6 +46,10 @@ type ExpireStore interface {
 	Get(key string) (int, error)
 	Incr(key string, expiry int) error
 	TTL(key string) (int, error)
+}
+
+func newExpireStore() ExpireStore {
+	return redisExpire{c: c}
 }
 
 type redisExpire struct {
@@ -67,14 +79,8 @@ func (r redisExpire) TTL(key string) (int, error) {
 	return ttl, nil
 }
 
-func setupRedis(tcpPort string) (redis.Conn, error) {
-	c, err := redis.Dial("tcp", tcpPort)
-	if err != nil {
-		return nil, err
-	}
-	longmap = redisMap{c: c, mapName: longmapName}
-	shortmap = redisMap{c: c, mapName: shortmapName}
-	custommap = redisMap{c: c, mapName: custommapName}
-	rateLimitMap = redisExpire{c: c}
+func setupRedis(port string) (redis.Conn, error) {
+	var err error
+	c, err = redis.Dial("tcp", port)
 	return c, err
 }
