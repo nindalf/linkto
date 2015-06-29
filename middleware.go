@@ -26,8 +26,8 @@ func MustParams(fn http.HandlerFunc, params ...string) http.HandlerFunc {
 		r.ParseForm()
 		for _, param := range params {
 			if len(r.Form.Get(param)) == 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(fmt.Sprintf("Expected parameter %s not found\n", param)))
+				errortext := fmt.Sprintf("Expected parameter %s not found", param)
+				http.Error(w, errortext, http.StatusBadRequest)
 				return
 			}
 		}
@@ -44,8 +44,8 @@ func SimpleAuth(fn http.HandlerFunc) http.HandlerFunc {
 		if len(linktopassword) > 0 {
 			password := r.Form.Get("password")
 			if linktopassword != password {
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte("Password param incorrect\n"))
+				errortext := "Password param incorrect"
+				http.Error(w, errortext, http.StatusUnauthorized)
 				return
 			}
 		}
@@ -65,10 +65,9 @@ func RateLimit(fn http.HandlerFunc, duration, numreq int, store ExpireStore) htt
 			fn(w, r)
 			return
 		}
-		w.WriteHeader(429)
 		ttl, _ := store.TTL(ip)
-		body := fmt.Sprintf("You've sent too many requests in a short span of time. Try again after %d seconds\n", ttl)
-		w.Write([]byte(body))
+		errortext := fmt.Sprintf("You've sent too many requests in a short span of time. Try again after %d seconds", ttl)
+		http.Error(w, errortext, 429)
 	}
 }
 
