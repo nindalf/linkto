@@ -40,7 +40,7 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.long.Get(longurl)
 	if err == nil {
-		errortext := fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, h.hostname, existing)
+		errortext := fmt.Sprintf("Short link from %s to %s/%s exists", longurl, h.hostname, existing)
 		http.Error(w, errortext, http.StatusTeapot)
 		return
 	}
@@ -57,7 +57,7 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	_, errcu := h.custom.Get(customurl)
 	_, errsh := h.short.Get(customurl)
 	if errcu == nil || errsh == nil {
-		errortext := fmt.Sprintf("Custom URL %s/%s is already taken\n", h.hostname, customurl)
+		errortext := fmt.Sprintf("Custom URL %s/%s is already taken", h.hostname, customurl)
 		http.Error(w, errortext, http.StatusTeapot)
 		return
 	}
