@@ -1,0 +1,18 @@
+linkto:
+  build: .
+  working_dir: /go/src/github.com/nindalf/linkto
+  env_file: .env
+  ports:
+    - "9091:9091"
+  links:
+    - redis
+
+redis:
+  image: redis
+  volumes_from:
+    - dbvolume
+
+dbvolume:
+  image: busybox:ubuntu-14.04
+  volumes:
+    - /data

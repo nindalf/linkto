@@ -1,12 +1,10 @@
 FROM golang:1.4
+MAINTAINER Krishna Sundarram <krishna.sundarram@gmail.com>
 
-RUN go get -d github.com/garyburd/redigo/redis && go get github.com/nindalf/linkto
-
-ENV LINKTO_HOSTNAME=http://nindalf.com
-ENV LINKTO_WORDFILES="adjectives.txt animals.txt"
-ENV LINKTO_PASSWORD=goop
-
+RUN go get -d github.com/garyburd/redigo/redis
+ADD . /go/src/github.com/nindalf/linkto
 WORKDIR /go/src/github.com/nindalf/linkto
-RUN go build
+RUN go install
+
 EXPOSE 9091
 ENTRYPOINT linkto

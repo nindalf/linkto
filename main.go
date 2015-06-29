@@ -54,8 +54,9 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
 	customurl := r.Form.Get("customurl")
 
-	_, err := h.custom.Get(customurl)
-	if err == nil {
+	_, errcu := h.custom.Get(customurl)
+	_, errsh := h.short.Get(customurl)
+	if errcu == nil || errsh == nil {
 		errortext := fmt.Sprintf("Custom URL %s/%s is already taken\n", h.hostname, customurl)
 		http.Error(w, errortext, http.StatusTeapot)
 		return
