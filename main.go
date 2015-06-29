@@ -40,13 +40,13 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.long.Get(longurl)
 	if err == nil {
-		errortext := fmt.Sprintf("Short link from %s to %s/%s exists", longurl, h.hostname, existing)
-		http.Error(w, errortext, http.StatusTeapot)
+		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, h.hostname, existing)))
 		return
 	}
 	shorturl := h.shortener.GetShortURL()
 	h.long.Set(longurl, shorturl)
 	h.short.Set(shorturl, longurl)
+	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, shorturl)))
 }
 
@@ -57,11 +57,11 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	_, errcu := h.custom.Get(customurl)
 	_, errsh := h.short.Get(customurl)
 	if errcu == nil || errsh == nil {
-		errortext := fmt.Sprintf("Custom URL %s/%s is already taken", h.hostname, customurl)
-		http.Error(w, errortext, http.StatusTeapot)
+		w.Write([]byte(fmt.Sprintf("Custom URL %s/%s is already taken\n", h.hostname, customurl)))
 		return
 	}
 	h.custom.Set(customurl, longurl)
+	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, customurl)))
 }
 
@@ -77,7 +77,7 @@ func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
 		return
 	}
-	http.Error(w, fmt.Sprintf("No link found for %s", path), http.StatusBadRequest)
+	http.Error(w, fmt.Sprintf("No link found for %s", path), http.StatusNotFound)
 }
 
 func main() {
