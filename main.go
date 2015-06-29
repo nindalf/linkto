@@ -25,10 +25,10 @@ type handler struct {
 	short     StringStore
 	custom    StringStore
 	hostname  string
-	shortener Shortener
+	shortener shortener
 }
 
-func newHandler(hostname string, s Shortener) handler {
+func newHandler(hostname string, s shortener) handler {
 	long := newStringStore(longmapName)
 	short := newStringStore(shortmapName)
 	custom := newStringStore(custommapName)
@@ -43,7 +43,7 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, h.hostname, existing)))
 		return
 	}
-	shorturl := h.shortener.GetShortURL()
+	shorturl := h.shortener.getShortURL()
 	h.long.Set(longurl, shorturl)
 	h.short.Set(shorturl, longurl)
 	w.WriteHeader(http.StatusCreated)

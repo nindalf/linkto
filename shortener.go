@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-// Shortener creates short strings based on the words it was initialised with
-type Shortener struct {
+// shortener creates short strings based on the words it was initialised with
+type shortener struct {
 	wordsSlice [][]string
 	existing   StringStore
 }
 
-func (s Shortener) GetShortURL() string {
+func (s shortener) getShortURL() string {
 	var url string
 	var err error
 	for err == nil {
@@ -28,7 +28,7 @@ func (s Shortener) GetShortURL() string {
 	return url
 }
 
-func (s Shortener) createRandomString() string {
+func (s shortener) createRandomString() string {
 	var bytes bytes.Buffer
 	for _, words := range s.wordsSlice {
 		bytes.WriteString(words[rand.Intn(len(words))])
@@ -36,19 +36,19 @@ func (s Shortener) createRandomString() string {
 	return bytes.String()
 }
 
-func newShortener(existing StringStore, files []string) (Shortener, error) {
+func newShortener(existing StringStore, files []string) (shortener, error) {
 	rand.Seed(time.Now().UnixNano())
 
 	wordsSlice := make([][]string, len(files))
 	for i, file := range files {
 		words, err := readWords(file)
 		if err != nil {
-			return Shortener{}, err
+			return shortener{}, err
 		}
 		wordsSlice[i] = words
 	}
 
-	return Shortener{wordsSlice, existing}, nil
+	return shortener{wordsSlice, existing}, nil
 }
 
 func readWords(filename string) ([]string, error) {
