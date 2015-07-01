@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +20,11 @@ const (
 
 	linktoPort = ":9091"
 )
+
+type response struct {
+	longurl  string
+	shorturl string
+}
 
 type handler struct {
 	long      StringStore
@@ -40,14 +46,14 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.long.Get(longurl)
 	if err == nil {
-		w.Write([]byte(fmt.Sprintf("Short link from %s to %s/%s exists\n", longurl, h.hostname, existing)))
+		w.Write(respBody(longurl, h.hostname, existing))
 		return
 	}
 	shorturl := h.shortener.getShortURL()
 	h.long.Set(longurl, shorturl)
 	h.short.Set(shorturl, longurl)
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, shorturl)))
+	w.Write(respBody(longurl, h.hostname, shorturl))
 }
 
 func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +68,17 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	}
 	h.custom.Set(customurl, longurl)
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(fmt.Sprintf("Shortened %s to %s/%s\n", longurl, h.hostname, customurl)))
+	w.Write(respBody(longurl, h.hostname, customurl))
+}
+
+func respBody(longurl, hostname, shorturl string) []byte {
+	s := fmt.Sprintf("%s/%s", hostname, shorturl)
+	r := response{longurl: longurl, shorturl: s}
+	body, err := json.Marshal(r)
+	if err != nil {
+		return []byte("Server error")
+	}
+	return body
 }
 
 func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
