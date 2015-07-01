@@ -98,10 +98,10 @@ func main() {
 	h := newHandler(hostname, shortener)
 
 	shorten := MustParams(RateLimit(h.shorten, rateLimitSecs, rateLimitRequests, newExpireStore()), "longurl")
-	http.HandleFunc("/shorten", LogResp(shorten))
+	http.HandleFunc("/shorten", LogResp(CORS(shorten)))
 
 	customShorten := MustParams(SimpleAuth(h.customShorten), "longurl", "customurl")
-	http.HandleFunc("/customshorten", LogResp(customShorten))
+	http.HandleFunc("/customshorten", LogResp(CORS(customShorten)))
 
 	http.HandleFunc("/", LogResp(h.redirect))
 

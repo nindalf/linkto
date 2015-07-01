@@ -71,6 +71,14 @@ func RateLimit(fn http.HandlerFunc, duration, numreq int, store ExpireStore) htt
 	}
 }
 
+// CORS enables Cross-origin resource sharing for this request.
+func CORS(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+	}
+}
+
 func getIPAddress(r *http.Request) string {
 	ip := r.Header.Get("X-Forwarded-For") // assuming its behind nginx
 	if len(ip) > 0 {
