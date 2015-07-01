@@ -46,6 +46,7 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.long.Get(longurl)
 	if err == nil {
+		w.Header().Set("Content-Type", "text/json")
 		w.Write(respBody(longurl, h.hostname, existing))
 		return
 	}
@@ -53,6 +54,7 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 	h.long.Set(longurl, shorturl)
 	h.short.Set(shorturl, longurl)
 	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "text/json")
 	w.Write(respBody(longurl, h.hostname, shorturl))
 }
 
@@ -68,6 +70,7 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	}
 	h.custom.Set(customurl, longurl)
 	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "text/json")
 	w.Write(respBody(longurl, h.hostname, customurl))
 }
 
