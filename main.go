@@ -22,8 +22,8 @@ const (
 )
 
 type response struct {
-	longurl  string
-	shorturl string
+	Longurl  string `json:"longurl"`
+	Shorturl string `json:"shorturl"`
 }
 
 type handler struct {
@@ -73,7 +73,7 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 
 func respBody(longurl, hostname, shorturl string) []byte {
 	s := fmt.Sprintf("%s/%s", hostname, shorturl)
-	r := response{longurl: longurl, shorturl: s}
+	r := response{Longurl: longurl, Shorturl: s}
 	body, err := json.Marshal(r)
 	if err != nil {
 		return []byte("Server error")
