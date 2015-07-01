@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	rateLimitSecs     = 60
+	rateLimitSecs     = 10
 	rateLimitRequests = 10
 
 	redisPortEnv = "REDIS_PORT"
