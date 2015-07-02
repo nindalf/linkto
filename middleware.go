@@ -97,8 +97,18 @@ func (r responseLogger) Header() http.Header {
 	return r.w.Header()
 }
 
+// Write logs the first line of the response and writes the full response to the ResponseWriter
 func (r responseLogger) Write(b []byte) (int, error) {
-	log.Printf("%s - %s", r.ip, string(b))
+	logtext := string(b)
+	endl := strings.IndexRune(logtext, '\n')
+	if endl > 0 {
+		if len(logtext) > endl+2 {
+			logtext = logtext[0:endl] + " ... (truncated)\n"
+		}
+	} else {
+		logtext = logtext + "\n"
+	}
+	log.Printf(fmt.Sprintf("%s - %s", r.ip, logtext))
 	return r.w.Write(b)
 }
 
