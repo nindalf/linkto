@@ -47,15 +47,16 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.long.Get(longurl)
 	if err == nil {
 		w.Header().Set("Content-Type", "text/json")
-		w.Write(respBody(longurl, h.hostname, existing))
+		w.Write(respJSON(longurl, h.hostname, existing))
 		return
 	}
 	shorturl := h.shortener.getShortURL()
 	h.long.Set(longurl, shorturl)
 	h.short.Set(shorturl, longurl)
-	w.WriteHeader(http.StatusCreated)
+
 	w.Header().Set("Content-Type", "text/json")
-	w.Write(respBody(longurl, h.hostname, shorturl))
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respJSON(longurl, h.hostname, shorturl))
 }
 
 func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
@@ -65,22 +66,20 @@ func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	_, errcu := h.custom.Get(customurl)
 	_, errsh := h.short.Get(customurl)
 	if errcu == nil || errsh == nil {
-		w.Write([]byte(fmt.Sprintf("Custom URL %s/%s is already taken\n", h.hostname, customurl)))
+		fmt.Fprintf(w, "Custom URL %s/%s is already taken\n", h.hostname, customurl)
 		return
 	}
 	h.custom.Set(customurl, longurl)
-	w.WriteHeader(http.StatusCreated)
+
 	w.Header().Set("Content-Type", "text/json")
-	w.Write(respBody(longurl, h.hostname, customurl))
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respJSON(longurl, h.hostname, customurl))
 }
 
-func respBody(longurl, hostname, shorturl string) []byte {
+func respJSON(longurl, hostname, shorturl string) []byte {
 	s := fmt.Sprintf("%s/%s", hostname, shorturl)
 	r := response{Longurl: longurl, Shorturl: s}
-	body, err := json.Marshal(r)
-	if err != nil {
-		return []byte("Server error")
-	}
+	body, _ := json.Marshal(r)
 	return body
 }
 
