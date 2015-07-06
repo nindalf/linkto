@@ -85,6 +85,10 @@ func respJSON(longurl, hostname, shorturl string) []byte {
 
 func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path[1:len(r.URL.Path)]
+	if path == "" {
+		w.Write([]byte(mainpage))
+		return
+	}
 	longurl, err := h.short.Get(path)
 	if err == nil {
 		http.Redirect(w, r, longurl, http.StatusMovedPermanently)
