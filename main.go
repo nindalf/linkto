@@ -43,6 +43,9 @@ func newHandler(hostname string, s shortener) handler {
 
 func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
+	if !strings.HasPrefix(longurl, "http://") {
+		longurl = "http://" + longurl
+	}
 
 	existing, err := h.long.Get(longurl)
 	if err == nil {
@@ -61,8 +64,11 @@ func (h handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 func (h handler) customShorten(w http.ResponseWriter, r *http.Request) {
 	longurl := r.Form.Get("longurl")
-	customurl := r.Form.Get("customurl")
+	if !strings.HasPrefix(longurl, "http://") {
+		longurl = "http://" + longurl
+	}
 
+	customurl := r.Form.Get("customurl")
 	_, errcu := h.custom.Get(customurl)
 	_, errsh := h.short.Get(customurl)
 	if errcu == nil || errsh == nil {
