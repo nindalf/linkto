@@ -110,11 +110,10 @@ func (h handler) redirect(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	redisPort := os.Getenv(redisPortEnv)
-	c, err := setupRedis(redisPort[strings.LastIndex(redisPort, "/")+1 : len(redisPort)])
+	err := setupRedis(redisPort[strings.LastIndex(redisPort, "/")+1:])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	defer c.Close()
 
 	files := strings.Split(os.Getenv(wordfilesEnv), " ")
 	shortener, err := newShortener(newStringStore(shortmapName), files)

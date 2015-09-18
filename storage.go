@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"time"
 
 	"github.com/garyburd/redigo/redis"
 )
@@ -13,7 +14,7 @@ const (
 )
 
 var (
-	c redis.Conn
+	pool redis.Pool
 )
 
 // StringStore is a map from string to string
@@ -23,20 +24,24 @@ type StringStore interface {
 }
 
 func newStringStore(name string) StringStore {
-	return redisMap{c: c, mapName: name}
+	return &redisMap{pool: pool, mapName: name}
 }
 
 type redisMap struct {
-	c       redis.Conn
+	pool    redis.Pool
 	mapName string
 }
 
-func (r redisMap) Get(key string) (string, error) {
-	return redis.String(r.c.Do("HGET", r.mapName, key))
+func (r *redisMap) Get(key string) (string, error) {
+	conn := r.pool.Get()
+	defer conn.Close()
+	return redis.String(conn.Do("HGET", r.mapName, key))
 }
 
-func (r redisMap) Set(key, value string) error {
-	_, err := r.c.Do("HSET", r.mapName, key, value)
+func (r *redisMap) Set(key, value string) error {
+	conn := r.pool.Get()
+	defer conn.Close()
+	_, err := conn.Do("HSET", r.mapName, key, value)
 	return err
 }
 
@@ -49,27 +54,33 @@ type ExpireStore interface {
 }
 
 func newExpireStore() ExpireStore {
-	return redisExpire{c: c}
+	return &redisExpire{pool: pool}
 }
 
 type redisExpire struct {
-	c redis.Conn
+	pool redis.Pool
 }
 
-func (r redisExpire) Get(key string) (int, error) {
-	return redis.Int(r.c.Do("GET", key))
+func (r *redisExpire) Get(key string) (int, error) {
+	conn := r.pool.Get()
+	defer conn.Close()
+	return redis.Int(conn.Do("GET", key))
 }
 
-func (r redisExpire) Incr(key string, expireSecs int) error {
-	r.c.Send("INCR", key)
-	r.c.Send("EXPIRE", key, expireSecs)
-	r.c.Flush()
-	_, err := r.c.Receive()
+func (r *redisExpire) Incr(key string, expireSecs int) error {
+	conn := r.pool.Get()
+	defer conn.Close()
+	conn.Send("INCR", key)
+	conn.Send("EXPIRE", key, expireSecs)
+	conn.Flush()
+	_, err := conn.Receive()
 	return err
 }
 
-func (r redisExpire) TTL(key string) (int, error) {
-	ttl, err := redis.Int(r.c.Do("TTL", key))
+func (r *redisExpire) TTL(key string) (int, error) {
+	conn := r.pool.Get()
+	defer conn.Close()
+	ttl, err := redis.Int(conn.Do("TTL", key))
 	if err != nil {
 		return ttl, err
 	}
@@ -79,8 +90,23 @@ func (r redisExpire) TTL(key string) (int, error) {
 	return ttl, nil
 }
 
-func setupRedis(port string) (redis.Conn, error) {
-	var err error
-	c, err = redis.Dial("tcp", port)
-	return c, err
+func setupRedis(port string) error {
+	pool = redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", port)
+			if err != nil {
+				return nil, err
+			}
+			return c, err
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
+	conn := pool.Get()
+	_, err := conn.Do("PING")
+	return err
 }
